@@ -942,30 +942,33 @@ class JournalApp {
             return;
         }
 
+        // Temporarily set the API key for testing
+        const originalApiKey = this.aiConfig.apiKey;
+        this.aiConfig.apiKey = apiKey;
+
         const testBtn = document.getElementById('testApiKey');
         const originalText = testBtn.innerHTML;
         testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
         testBtn.disabled = true;
 
         try {
-            const response = await fetch('https://api.openai.com/v1/models', {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                this.showNotification('API key is valid!', 'success');
+            console.log('🧪 Testing API connection in Electron app...');
+            const success = await this.testApiConnection();
+            
+            if (success) {
+                this.showNotification('✅ API key is valid and working!', 'success');
             } else {
-                this.showNotification('API key is invalid. Please check and try again.', 'error');
+                this.showNotification('❌ API key test failed. Check console for details.', 'error');
             }
         } catch (error) {
-            this.showNotification('Error testing API key. Please check your connection.', 'error');
+            console.error('Test API Key Error:', error);
+            this.showNotification(`❌ Error testing API key: ${error.message}`, 'error');
+        } finally {
+            // Restore original API key
+            this.aiConfig.apiKey = originalApiKey;
+            testBtn.innerHTML = originalText;
+            testBtn.disabled = false;
         }
-
-        testBtn.innerHTML = originalText;
-        testBtn.disabled = false;
     }
 
     // AI API Methods
@@ -1009,6 +1012,58 @@ class JournalApp {
             console.error('OpenAI API Error:', error);
             this.showNotification(`AI request failed: ${error.message}`, 'error');
             return null;
+        }
+    }
+
+    // Test API Connection
+    async testApiConnection() {
+        if (!this.aiConfig.apiKey) {
+            this.showNotification('Please configure your OpenAI API key in Settings first.', 'error');
+            return false;
+        }
+
+        try {
+            console.log('Testing API connection...');
+            console.log('API Key:', this.aiConfig.apiKey.substring(0, 10) + '...');
+            console.log('Model:', this.aiConfig.model);
+            
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.aiConfig.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: this.aiConfig.model,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: 'Hello, this is a test message. Please respond with "API connection successful!"'
+                        }
+                    ],
+                    max_tokens: 50,
+                    temperature: 0.7
+                })
+            });
+
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API Error Response:', errorText);
+                throw new Error(`API request failed: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('API Response:', data);
+            
+            this.showNotification('✅ API connection successful!', 'success');
+            return true;
+        } catch (error) {
+            console.error('API Connection Test Failed:', error);
+            this.showNotification(`❌ API connection failed: ${error.message}`, 'error');
+            return false;
         }
     }
 
